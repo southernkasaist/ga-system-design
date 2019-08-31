@@ -283,7 +283,7 @@ The large read volume comes from lots of report viewers.
 
 Reports are not essentially real-time, but has a 1 hour limit for generation, so we use offline batch processing to prepare these reports.
 
-Use a batch to incrementally process raw `EventDataPoint` into various kinds of `BucketEvent` data configured by report viewers or predefined by the system. Some of the `BucketEvent` data are common for all reports, some of them maybe specific for different reports.
+Use a batch to incrementally process raw `EventDataPoint` into various kinds (we call `dimension` here) of `BucketEvent` data configured by report viewers or predefined by the system. Some of the `BucketEvent` data are common for all reports, some of them maybe specific for different reports.
 
 We can also leverage caching (e.g., [Redis](https://redis.io/)) to cache query results to reduce the overall latency and pressure of reporting service and primary storage.
 
