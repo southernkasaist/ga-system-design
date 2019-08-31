@@ -57,49 +57,36 @@ For simplicity, we assume that our system is required to provide report of `user
 The input of the system is time-series user event data points.
 
 ```java
-class EventData {
-    // The sales of this purchase event.
-    long sales;
-}
-
 class EventDataPoint {
     // The id used to identify site that produced the event data.
     String siteId;
     // The timestamp of event data.
     long timestamp;
-    // The event data.
-    EventData eventData;
+    // Various kinds of event data. e.g., {"sales": "100"}.
+    Map<String, String> event;
 }
 ```
 
 The output of the system is time-series user event data points and aggregation result.
 
 ```java
-class ReportData {
-    // Event data count.
-    long count;
-    // Sum of sales.
-    long sales;
-}
-
 class ReportDataPoint {
     // The unit type of spcified time interval queried. e.g., munite, hour, etc.
     TimeUnit timeUnit;
     // The offset of corresponding time unit type in storage. e.g., the 435336 hour since epoch.
     long offset;
-    // The report data contains aggregated metrics of the current time internal unit. e.g., sum of events of 1 hour, etc.
-    ReportData data;
+    // The report data contains aggregated metrics of the current time internal unit.
+    // e.g., { "count": "10", "sales": "300" } of 1 hour.
+    Map<String, String> metrics;
 }
 
 class Report {
     // The id used to identify site that produced the event data.
     String siteId;
-    // Report data points.
+    // Time-series report data points.
     List<ReportDataPoint> reportDataPoints;
-    // The total count of events in specified time interval.
-    long totalCount;
-    // The total amount of sales in specified time interval.
-    long totalSales;
+    // Aggregated metrics calculated from 2 bounds of interval.
+    Map<String, String> aggregatedMetrics;
 }
 ```
 
@@ -113,13 +100,19 @@ interface EventDataCollector {
 
 // System output interface
 interface ReportQueryExecutor {
-    Report query(String siteId, TimeUnit timeUnit, long fromInclusive, long toInclusive);
+    Report query(String siteId, String reportId, TimeUnit timeUnit, long fromInclusive, long toInclusive);
 }
 ```
 
-## Storage, Sharding and Bucket
+`reportId` is used to get the report configuration with which we can figure out what kind of `Report` we need to query.
+
+For example, `reportId=count_sales_sum` will tell the reporting service to query time-series storage contains `count sum` and `sales sum` records.
+
+## Storage, Sharding and Bucket for Time-Series Data
 
 We have defined our domain data and system interfaces. The next step is to define storage model and indexes for query operations.
+
+Each `Report` is configured to query serveral kinds of 
 
 With respect to the requirements, we define storage as following:
 
