@@ -224,6 +224,8 @@ At last, as we can get `BucketData` of `from` and `to` bucket event, so we can g
 
 - Locating bucket event: `O(1)`
 
+- Site stats maintenance: `O(1)`
+
 - Sum of event count and sales of interval: `O(1)` in average
 
 Note that if `fromInclusive` and `toInclusive` locate in different shards, then we can query both `hour` shards and `minute` shards to get the final result quickly.
