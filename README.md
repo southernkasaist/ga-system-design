@@ -18,19 +18,31 @@ The system needs to:
 
 ## Functional Requirements
 
-> handle large read/query volume: Millions merchants want to get insight about their business. Read/Query patterns are time-series related metrics.
+> Handle large read/query volume: Millions merchants want to get insight about their business. Read/Query patterns are time-series related metrics.
 
+The storage should be designed to be optimal for `time-series` data.
 
+Data querying range should be limited by `time interval` with `from` and `to` bound.
 
-> provide metrics to customers with at most one hour delay.
+Aggregated metrics should be optimal for the interval querying.
 
-> have the ability to reprocess historical data in case of bugs in the processing logic.
+> Provide metrics to customers with at most one hour delay.
+
+We should create the target reporting data records as fast as possible, but not required for real-time computation.
+
+> Have the ability to reprocess historical data in case of bugs in the processing logic.
+
+We must keep raw event data points in order to replay these events from specified starting timestamp when the buggy processing logic applied.
 
 ## Non-Functional Requirements
 
-> handle large write volume: Billions write events per day.
+> Handle large write volume: Billions write events per day.
 
-> run with minimum downtime.
+The storage should be easily scaled to support heavy writes.
+
+> Run with minimum downtime.
+
+Must have high availability.
 
 # High-Level Solution Design
 
@@ -46,8 +58,6 @@ The input of the system is time-series user event data points.
 
 ```java
 class EventData {
-    // The key used to identify user of a site.
-    String userKey;
     // The sales of this purchase event.
     long sales;
 }
@@ -179,18 +189,46 @@ We can always get the latest `pre-sum` data from `SiteStats` and when we need to
 We create record by:
 
 - Incrementing count from stats: `BucketEvent.data.countSum = SiteStats.countSum + 1`
+
 - Add event sales up to stats: `BucketEvent.data.salesSum = SiteStats.salesSum + EventData.sales`
 
 We update record by:
 
 - Incrementing count of current offset: `BucketEvent.data.countSum += 1`
+
 - Add event sales up to total sales of current offset: `BucketEvent.data.salesSum += EventData.sales`
 
 Specificly, when we create new `BucketEvent`, we should keep the timestamp of `EventData` as the `replayTimestamp` which will be used to seek for where we can re-compute `BucketEvent`.
 
 ## Indexes & Querties
 
+The reason we don't use `siteId` for sharding is because some sites may have huge number of event data points while some sites may have small number of data points, which will lead to unbalance of sharding.
 
+As we partition shards with time unit, we need indexes for `siteId` to get all bucket events for specific `siteId`.
+
+Given query with `fromInclusive` and `toInclusive` along with `TimeUnit`, we can locate the shard of `from` and `to` of query interval.
+
+Then in each shard we query with `siteId` to get bucket events of the shard, with which we can then locate the `from` and `to` bucket by mapping to `offset`.
+
+At last, as we can get `BucketData` of `from` and `to` bucket event, so we can get the sum of event count and sales of the interval by following:
+
+- Total count of interval: `to.BucketData.countSum - from.BucketData.countSum`
+
+- Total sales of interval: `to.BucketData.salesSum - from.BucketData.salesSum`
+
+## Time Complexity
+
+`O(1)` for both updating and querying for `BucketEvent`:
+
+- Locating shard: `O(1)`
+
+- Locating bucket event: `O(1)`
+
+- Sum of event count and sales of interval: `O(1)` in average
+
+Note that if `fromInclusive` and `toInclusive` locate in different shards, then we can query both `hour` shards and `minute` shards to get the final result quickly.
+
+If necessary, we can even maintain `day` shards to improve large interval querying performance.
 
 ----
 
