@@ -28,7 +28,7 @@ Aggregated metrics should be optimal for the interval querying.
 
 > Provide metrics to customers with at most one hour delay.
 
-We should create the target reporting data records as fast as possible, but not required for real-time computation.
+We can create the target reporting data records with offline batches as real-time computation is not required.
 
 > Have the ability to reprocess historical data in case of bugs in the processing logic.
 
@@ -236,10 +236,6 @@ If necessary, we can even maintain `day` shards to improve large interval queryi
 
 This section is about the architecture design with assumed OSS and key components to draw a big picture of how to make the system.
 
-We need to consider each requirement from technical perspective.
-
-We must understand what we need and why we need it.
-
 For OSS, we should consider those are best fit for our requirement and are widely used with strong and stable community support. Because these OSS are key components of our system, which must be stable and updated for long-term in the lifecycle of the system.
 
 Thus, we try to use major OSS if possible.
@@ -284,7 +280,7 @@ The large read volume comes from lots of report viewers.
 
 Reports are not essentially real-time, but has a 1 hour limit for generation, so we use offline batch processing to prepare these reports.
 
-- Use a batch to incrementally process raw data into various kinds of dimension data configured by report viewers or predefined by the system. Some of the dimension data are common for all reports, some of them maybe specific for different reports.
+- Use a batch to incrementally process raw `EventDataPoint` into various kinds of dimension data configured by report viewers or predefined by the system. Some of the dimension data are common for all reports, some of them maybe specific for different reports. For each dimension, we do sharding for time units with `BucketEvent`.
 
 - A report is a combination of various dimension data with computation on aggregation results. We need another batch job to incrementally process dimension data into different users' reports as well.
 
@@ -294,27 +290,13 @@ When report viewers want to view some reports, the computation engine will find 
 
 We can also leverage caching (e.g., [Redis](https://redis.io/)) to cache query results to reduce the overall latency and pressure of computation engine and primary storage.
 
-## Computation Engine
-
-In order to process data and do computation on reports, we need performent computation engine that fit for large volume of data.
-
-The computation engine should:
-
-- Run in distributed parallel manner with low latency
-  
-- Support streaming data processing with vairous kinds of time-windows (e.g., `1 minute`, `1 hour`, `1 day`, etc)
-
-- Has high availability
-
-Here, we use [Apache Spark](https://spark.apache.org/) for this purpose as it's well designed for big data real-time stream computation and widely used, which is fit for our requirement.
-
 ## High availability
 
 In order to ensure high availability of the whole system, we need to ensure high availability of each component of it.
 
 ### Middlewares
 
-Middlewares like `Kafka`, `Cassandra`, `Redis` and `Spark` are naturally designed to be fault-tolerant with clustering support.
+Middlewares like `Kafka`, `Cassandra` and `Redis` are naturally designed to be fault-tolerant with clustering support.
 
 We also need [HAProxy](http://www.haproxy.org/) like load balancer for both data collector api and report api service.
 
@@ -401,7 +383,7 @@ The configuration data can be stored in either `Cassandra` or other databases (e
 
 ## Dimension Data Processing Batch
 
-This is a batch job built on top of `Spark` to convert raw data into dimension data incrementally with short execution interval.
+This is a batch job used to convert raw data into dimension data incrementally with short execution interval.
 
 How to generate the dimension data is based on the configuration data specified by `Report Configuration Service`.
 
@@ -409,7 +391,7 @@ The generated dimension data will be stored in dimension scheme in `Cassandra`, 
 
 ## Report Data Processing Batch
 
-This is a batch job built on top of `Spark` to combine dimension data by aggregating required metrics into report data incrementally with short execution interval.
+This is a batch job used to combine dimension data by aggregating required metrics into report data incrementally with short execution interval.
 
 How to generate the report data is based on the configuration data specified by `Report Configuration Service`.
 
@@ -433,7 +415,7 @@ Of course, the API is responsible for user authentication as well.
 
 ## Reporting Service
 
-Reporting service is built on top of `Spark` to query report data points from `Cassandra` and do computation on the data to generate final report.
+Reporting service is used to query report data points from `Cassandra` and do computation on the data to generate final report.
 
 ## Internal Management Service
 
