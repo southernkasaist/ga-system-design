@@ -73,9 +73,9 @@ class ReportData {
 }
 
 class ReportDataPoint {
-    // The unit type of spcified time interval queried. e.g., second, munite, hour, day, etc.
+    // The unit type of spcified time interval queried. e.g., munite, hour, etc.
     TimeUnit timeUnit;
-    // The offset of corresponding time unit type in storage. e.g., the 17885th day from epoch.
+    // The offset of corresponding time unit type in storage. e.g., the 435336 hour since epoch.
     long offset;
     // The report data contains aggregated metrics of the current time internal unit. e.g., sum of events of 1 hour, etc.
     ReportData data;
@@ -86,6 +86,10 @@ class Report {
     String siteId;
     // Report data points.
     List<ReportDataPoint> reportDataPoints;
+    // The total count of events in specified time interval.
+    long totalCount;
+    // The total amount of sales in specified time interval.
+    long totalSales;
 }
 ```
 
@@ -103,13 +107,96 @@ interface ReportQueryExecutor {
 }
 ```
 
-## Storage & Index
+## Storage, Sharding and Bucket
 
-## Usage Cases & Querties
+We have defined our domain data and system interfaces. The next step is to define storage model and indexes for query operations.
+
+With respect to the requirements, we define storage as following:
+
+### Backup Storage For Raw `EventDataPoint`
+
+A backup storage for all raw `EventDataPoint` with which we can replay all events to re-compute data for reporting in case that the previous logic had mistake.
+
+### Time unit partationed shards for storage model
+
+For given `EventDataPoint`, we map the `timestamp` into predefined time unit backet `minute`, `hour` since epoch.
+
+For example, `1567240858` (`Saturday, August 31, 2019 5:40:58 PM GMT+09:00`) is the timestamp of 1 data point.
+
+Assume we have different shards for `minute`, `hour` respectively and each has a bucket size of time as followings:
+
+- `minute`: stores data of 3 day.
+- `hour`: stores data of 3*60 = 180 days.
+
+Then we can calculate the shard of storage in which we should put this data point into.
+
+As the timestamp is mapped to `18139` days since epoch, so we can get shard key for each:
+
+- `minute`: shard key `6047`
+- `hour`: shard key `101`
+
+The next step is to locate the record `BucketEvent` that should contains this data point in each shard:
+
+- `minute`: map timestamp to `26120683` minutes since epoch and we cat get or create new event record with offset `26120683`.
+  
+- `hour`: map timestamp to `435345` hours since epoch and we can get or create new event record with offset `435345`.
+
+```java
+class BucketData {
+    // Snapshot of sum of count of all event data. e.g., from 3 years ago starts with the first event data of current site.
+    long countSum;
+    // Snapshot of sum of sales of all event data. e.g., from 3 years ago starts with the first event data of current site.
+    long salesSum;
+}
+
+class BucketEvent {
+    // The id used to identify site that produced the event data.
+    String siteId;
+    // The offset of corresponding time unit type.
+    long offset;
+    // The bucket data contains pre-sum of all event count and sales.
+    BucketData data;
+    // The starting timestamp of current offset used to find the replaying start data point for re-computation.
+    long replayTimestamp;
+}
+```
+
+Note that as we need to always keep the `pre-sum` of `count` and `sales` of current `site`. So we also need to maintain the latest `pre-sum` of current `site`.
+
+```java
+class SiteStats {
+    // The id used to identify site that produced the event data.
+    String siteId;
+    // Snapshot of sum of count of all event data. e.g., from 3 years ago starts with the first event data of current site.
+    long countSum;
+    // Snapshot of sum of sales of all event data. e.g., from 3 years ago starts with the first event data of current site.
+    long salesSum;
+}
+```
+
+We can always get the latest `pre-sum` data from `SiteStats` and when we need to create new `BucketEvent`, we can use that `pre-sum` for the bucket.
+
+We create record by:
+
+- Incrementing count from stats: `BucketEvent.data.countSum = SiteStats.countSum + 1`
+- Add event sales up to stats: `BucketEvent.data.salesSum = SiteStats.salesSum + EventData.sales`
+
+We update record by:
+
+- Incrementing count of current offset: `BucketEvent.data.countSum += 1`
+- Add event sales up to total sales of current offset: `BucketEvent.data.salesSum += EventData.sales`
+
+Specificly, when we create new `BucketEvent`, we should keep the timestamp of `EventData` as the `replayTimestamp` which will be used to seek for where we can re-compute `BucketEvent`.
+
+## Indexes & Querties
+
+
 
 ----
 
 # Architecture Design
+
+This section is about the architecture design with assumed OSS and key components to draw a big picture of how to make the system.
 
 We need to consider each requirement from technical perspective.
 
@@ -152,8 +239,6 @@ Thus, a RDBMS is not the fit as we don't need transaction support and strong con
 So what we go for is major wide column store.
 
 Here, we assume that we use [Apache Cassandra](http://cassandra.apache.org/) for this purpose as it's designed for big data with respect to scalability, high availability and good performance, which is fit for our requirement.
-
-Especially, `Cassandra` uses [Log-Structured Merge Tree](https://en.wikipedia.org/wiki/Log-structured_merge-tree) as storage engine, which avoids `read-before-write` manner and can get better write performance than [B-Tree](https://en.wikipedia.org/wiki/B-tree) based engines.
 
 ## Large Read Volume
 
