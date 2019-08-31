@@ -239,7 +239,7 @@ In such a case, we don't need to make no-data-loss promise only for real-time re
 
 # Architecture
 
-
+![Architecture](./resources/GoogleAnalytics_SystemDesign.png)
 
 # Moving Forward to Detailed Design
 
