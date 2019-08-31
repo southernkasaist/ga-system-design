@@ -4,23 +4,112 @@ Design A Google Analytic like Backend System. We need to provide Google Analytic
 
 The system needs to:
 
-- handle large write volume: Billions write events per day.
+- Handle large write volume: Billions write events per day.
 
-- handle large read/query volume: Millions merchants want to get insight about their business. Read/Query patterns are time-series related metrics.
+- Handle large read/query volume: Millions merchants want to get insight about their business. Read/Query patterns are time-series related metrics.
 
-- provide metrics to customers with at most one hour delay.
+- Provide metrics to customers with at most one hour delay.
 
-- run with minimum downtime.
+- Run with minimum downtime.
 
-- have the ability to reprocess historical data in case of bugs in the processing logic.
+- Have the ability to reprocess historical data in case of bugs in the processing logic.
 
-# Functional Requirements
+# Requirements Analysis
 
-Google Analytics enables various clients to collect user activity and site actions to server side and then provide complex reporting for business decision makers to do analysis and make decesion of next action to continuously improve their service.
+## Functional Requirements
 
-Our task is to provide the backend of such a system which receive collected data points and convert data into reports.
+> handle large read/query volume: Millions merchants want to get insight about their business. Read/Query patterns are time-series related metrics.
 
-# Technical Requirements
+
+
+> provide metrics to customers with at most one hour delay.
+
+> have the ability to reprocess historical data in case of bugs in the processing logic.
+
+## Non-Functional Requirements
+
+> handle large write volume: Billions write events per day.
+
+> run with minimum downtime.
+
+# High-Level Solution Design
+
+## Domain Data Assumption
+
+Report metrics may have various values of specified time interval of data points.
+
+For simplicity, we assume that our system is required to provide report of `user purchase event` and `the sum of sales` of requested time interval.
+
+## System Interfaces
+
+The input of the system is time-series user event data points.
+
+```java
+class EventData {
+    // The key used to identify user of a site.
+    String userKey;
+    // The sales of this purchase event.
+    long sales;
+}
+
+class EventDataPoint {
+    // The id used to identify site that produced the event data.
+    String siteId;
+    // The timestamp of event data.
+    long timestamp;
+    // The event data.
+    EventData eventData;
+}
+```
+
+The output of the system is time-series user event data points and aggregation result.
+
+```java
+class ReportData {
+    // Event data count.
+    long count;
+    // Sum of sales.
+    long sales;
+}
+
+class ReportDataPoint {
+    // The unit type of spcified time interval queried. e.g., second, munite, hour, day, etc.
+    TimeUnit timeUnit;
+    // The offset of corresponding time unit type in storage. e.g., the 17885th day from epoch.
+    long offset;
+    // The report data contains aggregated metrics of the current time internal unit. e.g., sum of events of 1 hour, etc.
+    ReportData data;
+}
+
+class Report {
+    // The id used to identify site that produced the event data.
+    String siteId;
+    // Report data points.
+    List<ReportDataPoint> reportDataPoints;
+}
+```
+
+Finally, the interfaces of the system is:
+
+```java
+// System input interface
+interface EventDataCollector {
+    void collect(EventDataPoint dataPoint);
+}
+
+// System output interface
+interface ReportQueryExecutor {
+    Report query(String siteId, TimeUnit timeUnit, long fromInclusive, long toInclusive);
+}
+```
+
+## Storage & Index
+
+## Usage Cases & Querties
+
+----
+
+# Architecture Design
 
 We need to consider each requirement from technical perspective.
 
@@ -237,7 +326,7 @@ If in future, we want to enable real-time reporting to users, we can introduce `
 
 In such a case, we don't need to make no-data-loss promise only for real-time reporting servie.
 
-# Architecture
+# Architecture Diagram
 
 ![Architecture](./resources/GoogleAnalytics_SystemDesign.png)
 
