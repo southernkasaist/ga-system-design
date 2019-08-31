@@ -157,6 +157,11 @@ class BucketData {
     long countSum;
     // Snapshot of sum of sales of all event data. e.g., from 3 years ago starts with the first event data of current site.
     long salesSum;
+
+    /**
+     * Extensible point for more metrics.
+     */
+     // long xxx;
 }
 
 class BucketEvent {
@@ -226,11 +231,7 @@ At last, as we can get `BucketData` of `from` and `to` bucket event, so we can g
 
 - Site stats maintenance: `O(1)`
 
-- Sum of event count and sales of interval: `O(1)` in average
-
-Note that if `fromInclusive` and `toInclusive` locate in different shards, then we can query both `hour` shards and `minute` shards to get the final result quickly.
-
-If necessary, we can even maintain `day` shards to improve large interval querying performance.
+- Sum of event count and sales of interval: `O(1)`
 
 ----
 
@@ -282,15 +283,9 @@ The large read volume comes from lots of report viewers.
 
 Reports are not essentially real-time, but has a 1 hour limit for generation, so we use offline batch processing to prepare these reports.
 
-- Use a batch to incrementally process raw `EventDataPoint` into various kinds of dimension data configured by report viewers or predefined by the system. Some of the dimension data are common for all reports, some of them maybe specific for different reports. For each dimension, we do sharding for time units with `BucketEvent`.
+Use a batch to incrementally process raw `EventDataPoint` into various kinds of `BucketEvent` data configured by report viewers or predefined by the system. Some of the `BucketEvent` data are common for all reports, some of them maybe specific for different reports.
 
-- A report is a combination of various dimension data with computation on aggregation results. We need another batch job to incrementally process dimension data into different users' reports as well.
-
-All schemes of raw data, dimension data and report data are stored in `Cassandra`.
-
-When report viewers want to view some reports, the computation engine will find requested reports limited by requested time duration and do computation on them and then return the result to report viewers.
-
-We can also leverage caching (e.g., [Redis](https://redis.io/)) to cache query results to reduce the overall latency and pressure of computation engine and primary storage.
+We can also leverage caching (e.g., [Redis](https://redis.io/)) to cache query results to reduce the overall latency and pressure of reporting service and primary storage.
 
 ## High availability
 
@@ -310,7 +305,6 @@ In addition, we need our own service components such as:
 - `Data Storage Service`
 - `Report Configuration Service`
 - `Dimension Data Processing Batch`
-- `Report Data Processing Batch`
 - `Report API Gateway`
 - `Reporting Service`
 - `Internal Management Service`
@@ -379,7 +373,7 @@ Each storage service has a stable comsuming rate and if we want to increase the 
 
 ## Report Configuration Service
 
-The report configuration service is used to provide functionality for both external and internal users to define what kind of dimension data they need and what kind of reports they need.
+The report configuration service is used to provide functionality for both external and internal users to define what kind of dimension data (`BucketEvent.BucketData` attributes) they need and what kind of reports they need.
 
 The configuration data can be stored in either `Cassandra` or other databases (e.g., `MySQL`), depends on the requirement.
 
@@ -390,14 +384,6 @@ This is a batch job used to convert raw data into dimension data incrementally w
 How to generate the dimension data is based on the configuration data specified by `Report Configuration Service`.
 
 The generated dimension data will be stored in dimension scheme in `Cassandra`, waiting for following processing to generate reports.
-
-## Report Data Processing Batch
-
-This is a batch job used to combine dimension data by aggregating required metrics into report data incrementally with short execution interval.
-
-How to generate the report data is based on the configuration data specified by `Report Configuration Service`.
-
-The generated report data will be stored in report scheme in `Cassandra`, waiting for querying.
 
 ## Report API Gateway
 
