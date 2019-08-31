@@ -243,3 +243,12 @@ In such a case, we don't need to make no-data-loss promise only for real-time re
 
 # Moving Forward to Detailed Design
 
+Before we move forward to detailed design, we need to make introduction of the archtecture design to other teams' stakeholders to let them know the capability and limitation of current design in order to reach an consensus on functional and non-functional requirement.
+
+If there's any change of requirement, we need to fix our design to satisfy the new requirement.
+
+Then we need to spend some time on doing technical investigation of each key component with respect to feasibility, verification of assumptions and any technical uncertain topics to be checked.
+
+After we have done all these work, we can then start working on detailed design of protocol/API, storage scheme, detailed functional and non-functional items.
+
+Good luck.
