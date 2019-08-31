@@ -112,8 +112,6 @@ For example, `reportId=count_sales_sum` will tell the reporting service to query
 
 We have defined our domain data and system interfaces. The next step is to define storage model and indexes for query operations.
 
-Each `Report` is configured to query serveral kinds of 
-
 With respect to the requirements, we define storage as following:
 
 ### Backup Storage For Raw `EventDataPoint`
